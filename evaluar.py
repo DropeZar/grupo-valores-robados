@@ -1,5 +1,5 @@
 """Evalúa un ranking: MRR (la métrica de referencia), Hit@5 y Hit@1, y cuánto mejora sobre el B0.
-hola soy lu
+hola soy lu caste
 Además reporta, como diagnóstico, Hit@100, Recall@100 y el puesto mediano del mejor ganador.
 
 El ranking es un CSV con una fila por (licitación, empresa) y hasta 100 empresas por

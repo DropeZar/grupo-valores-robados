@@ -1,245 +1,104 @@
-# Y-Hat: ¿quién gana la licitación?
+# Grupo Valores Robados — Ranking de licitaciones
 
-Cada licitación es un documento en el que un organismo describe algo que necesita comprar.
-La tarea: **dada una licitación, rankear las empresas candidatas por probabilidad de
-ganarla**, usando sólo lo que se sabía cuando se publicó.
+**Y-Hat: ¿quién gana la licitación?** — dada una licitación pública, rankear las empresas
+candidatas por probabilidad de ganarla, usando sólo información anterior a su publicación.
+Se compite por **cuánto mejora el MRR sobre el baseline B0**.
 
-La pregunta de fondo no es sólo acertar. Una buena parte se resuelve sin leer nada: las
-empresas que ya ganan mucho en esa oficina y en ese rubro suelen volver a ganar. Eso es el
-**B0**, que viene dado. **Lo que interesa es cuánto agrega el texto por encima del B0.**
+> La consigna original y el detalle de los datos están en el repo público de la cátedra.
 
-## Cómo trabajar
+---
 
-Cada grupo trabaja en **su propio repo, privado**. No se crean ramas ni se hacen pull
-requests acá: este repo es público y lo ven todos los grupos.
+## La idea en una frase
 
-1. Crear un repo **vacío y privado** en GitHub (por ejemplo, `grupo-x`). No se puede usar un
-   fork: los forks de un repo público son públicos.
-2. Clonar éste, dejarlo como `upstream` y apuntar `origin` al repo propio:
+El B0 (incumbencia pura: quién ganó antes el mismo trabajo en la misma oficina) **entierra
+ganadores** — empresas capaces que no son "el proveedor de la casa" de esa oficina. Nuestro
+modelo los rescata con **texto**: reconoce que el historial de una empresa habla del mismo
+trabajo que pide la licitación, aunque no compartan códigos.
 
-   ```
-   git clone https://github.com/bravoivanagustin/ranking-licitaciones.git grupo-x
-   cd grupo-x
-   git remote rename origin upstream
-   git remote add origin git@github.com:<usuario>/grupo-x.git
-   git push -u origin main
-   ```
+**Códigos = cobertura. Texto = discriminación. El modelo los combina.**
 
-3. Trabajar ahí con las ramas y la organización que quieran.
-4. Cuando se publique algo nuevo acá (una corrección de `evaluar.py` o de los datos),
-   traerlo con:
-
-   ```
-   git pull upstream main
-   ```
-
-## Cómo empezar
+## El modelo
 
 ```
-uv sync          # instala Python (3.10+) y las dependencias en .venv/
+                 B0-v2  (incumbencia con backoff de códigos + pesos/tau tuneados)
+                   │  da el shortlist (top-200) y el rango de incumbencia
+Texto (embeddings bge-small, licitación ↔ historial de la empresa)
+                   │  da el rango por similitud
+                   ▼
+             FUSIÓN (rank fusion, α=0.5, K=5)  →  ranking final
 ```
 
-Los datos no están en el repo: se bajan del release
-[**`datos-v1`**](https://github.com/bravoivanagustin/ranking-licitaciones/releases/tag/datos-v1)
-(`data.zip`, ~175 MB) y se descomprimen en la raíz del repo, de modo que quede
-`data/<vertical>/`. Desde la raíz del repo:
+1. **B0-v2** (`b0_v2.py`): al B0 original le agregamos niveles de *backoff* — familia de PSC y
+   jerarquía de oficina (subagencia) — que suben el recall sin romper la incumbencia.
+2. **B0-v2 tuneado** (`b0_rocco.py`): pesos de los niveles **y** `tau` (vida media del
+   decaimiento) optimizados por vertical, de forma robusta (multi-semestre, sin tocar el test).
+3. **Texto** (`bge-small-en-v1.5`): embeddings de la licitación y del historial de cada empresa;
+   la similitud coseno es la señal de discriminación.
+4. **Fusión**: se reordena el top-200 del B0-v2 combinando incumbencia + texto por *rank fusion*.
+
+## Resultados
+
+**Elección de embedder** (dev 2023S2, Δ MRR vs B0, con el B0-v2 tuneado). Sorpresa: el modelo
+**más chico es el mejor** — los grandes (bge-base, Gemma) no aportan sobre texto corto de dominio:
+
+| embedder | rd | d | j | r | it | **prom** |
+|---|---|---|---|---|---|---|
+| MiniLM (22M) | +0,024 | +0,051 | +0,055 | +0,078 | +0,039 | +0,049 |
+| **bge-small (33M)** | **+0,049** | **+0,091** | **+0,078** | **+0,093** | +0,059 | **+0,074** |
+| bge-base (109M) | +0,023 | +0,072 | +0,073 | +0,075 | +0,038 | +0,056 |
+| gemma (300M) | +0,027 | +0,086 | +0,073 | +0,058 | +0,063 | +0,062 |
+
+**Validación en test sellado (2024S1):** el enfoque **mejora el MRR sobre el B0 de forma
+significativa en 4 de 5 verticales** (el intervalo de confianza no cruza el cero), con una mejora
+relativa del **30–80 %**. El resultado se sostiene de dev a test → **no es sobreajuste**. El
+número final con bge-small + B0-v2 tuneado está en `docs/resultados_finales.md`.
+
+## Estructura del repo
 
 ```
-curl -LO https://github.com/bravoivanagustin/ranking-licitaciones/releases/download/datos-v1/data.zip
-unzip data.zip
+├── b0.py, evaluar.py        baseline y evaluador (dados por la cátedra)
+├── b0_v2.py                 B0 con backoff de códigos
+├── b0_rocco.py              B0-v2 con pesos y tau tuneados por vertical
+├── test_final.py            corre el modelo final (bge-small + B0-v2 tuneado) en el test
+├── experimentos/            scripts de análisis, tuneo y exploración (ver abajo)
+├── docs/                    informes y bitácora del proyecto
+└── figuras/                 figuras del diagnóstico
 ```
 
-(o con el CLI de GitHub: `gh release download datos-v1 -R bravoivanagustin/ranking-licitaciones`;
-o desde el link, en "Assets"). En Windows, desde PowerShell o cmd (no desde Git Bash, cuyo
-`tar` no abre zips): `tar -xf data.zip`, o `Expand-Archive data.zip .` en
-PowerShell.
+## Cómo correr
 
-## Los datos
+Este entorno usa Python 3.15 (sin wheels para varias libs), así que fijamos **3.12** en un
+entorno efímero con `uv`:
 
-Hay cinco verticales, cada una en su carpeta, con el mismo formato:
+```bash
+# 1. datos (del release de la cátedra), descomprimidos en data/
+curl -LO <url-del-release>/data.zip && tar -xf data.zip
 
-| carpeta | rubro |
-|---|---|
-| `rd` | investigación y desarrollo |
-| `j` | mantenimiento y reparación de equipos |
-| `d` | IT y telecomunicaciones |
-| `r` | servicios profesionales |
-| `it` | productos informáticos |
-
-En cada una, cuatro tablas (el `README.md` de cada carpeta tiene el detalle):
-
-| tabla | una fila por | qué es |
-|---|---|---|
-| `licitaciones.parquet` | licitación | el input: `id`, `t` (publicación), `title`, `description`, `psc`, `naics`, `office`, `set_aside` |
-| `ganadores.parquet` | (licitación, empresa) | el label: `id`, `parent_uei` |
-| `empresas.parquet` | (empresa, semestre) | las candidatas y qué se sabía de ellas al empezar el semestre |
-| `historial.parquet` | contrato | los contratos anteriores, con fecha, rubro, oficina y descripción |
-
-Y en la raíz de `data/`, tres tablas de códigos comunes a las cinco verticales, para
-pasar de un código a su significado (otra fuente de texto):
-
-| tabla | columnas | ejemplo |
-|---|---|---|
-| `psc.parquet` | `codigo`, `descripcion` | `AN42` → HEALTH R&D SERVICES; HEALTH CARE - OTHER; APPLIED RESEARCH |
-| `naics.parquet` | `codigo`, `descripcion`, `version` | `541715` → Research and Development in the Physical, Engineering, and Life Sciences (…) |
-| `office.parquet` | `codigo`, `oficina`, `subagencia`, `departamento` | `N62645` → NAVAL MEDICAL LOGISTICS COMMAND · DEPT OF THE NAVY · DEPT OF DEFENSE |
-
-- `psc` (qué se compra) y `naics` (de qué industria es el trabajo) se cruzan con las columnas
-  del mismo nombre de `licitaciones` e `historial`; `office` (quién compra), con `office`.
-- `naics` junta las versiones 2002 a 2022 de la clasificación, porque el historial las mezcla
-  (`511210` y `513210` son los dos "Software Publishers"); `version` dice de cuál sale la
-  descripción. Algunos avisos traen el NAICS truncado (`541`): también están.
-- Todas las oficinas de las licitaciones tienen nombre. Algunas que sólo aparecen en el
-  `historial` tienen subagencia y departamento pero no nombre de oficina.
-
-**Las candidatas de una licitación son las filas de `empresas` de su semestre**
-(`2024S1` = enero–junio, `2024S2` = julio–diciembre): las empresas que ya habían ganado
-algún contrato del rubro antes de que empezara. `evaluar.py` rechaza un ranking que incluya
-cualquier otra empresa.
-
-**Todo es anterior al 1/7/2024.** Los datos no vienen divididos en train y validación:
-cada grupo arma la suya. Conviene que sea temporal: entrenar con lo más viejo y validar con
-lo más nuevo. Por ejemplo, validar con el último semestre:
-
-```python
-lic = pd.read_parquet("data/j/licitaciones.parquet")
-gan = pd.read_parquet("data/j/ganadores.parquet")
-val = lic[lic.t >= "2024-01-01"]
-gan[gan.id.isin(val.id)].to_parquet("mi_val_j.parquet")
+# 2. modelo final sobre el test (codifica con bge-small + rerank)
+PYTHONPATH="$PWD" uv run --no-project --python 3.12 \
+    --with sentence-transformers --with scikit-learn --with numpy --with pandas --with pyarrow \
+    python test_final.py
 ```
 
-**Ojo con el futuro.** Para una licitación publicada en `t`, sólo vale usar lo anterior a
-`t`: las filas de `empresas` de su semestre ya lo cumplen; del `historial`, sólo las filas
-con `fecha < t`. Un modelo que en validación usa el historial completo se ve muy bien y
-no sirve de nada con licitaciones nuevas.
+> Todos los scripts se corren **desde la raíz del repo** con `PYTHONPATH="$PWD"` (así encuentran
+> los módulos `b0`, `b0_v2`, `b0_rocco` y las carpetas `data/` y `.emb_cache/`). Los embeddings se
+> cachean en `.emb_cache/` (ignorado por git).
 
-## Las métricas
+## experimentos/
 
-`evaluar.py` recibe un CSV por vertical con el ranking de **hasta 100 empresas** por
-licitación (pueden ser menos; un ganador que no está en la lista cuenta 0):
+El camino completo, incluidos los **experimentos negativos** (que también son resultado):
 
-```
-id,parent_uei,puesto
-FA865124R0012,ABC123DEF456,1
-FA865124R0012,XYZ987GHI654,2
-```
+- `latente.py`, `latente_emb.py` — señal de texto con TF-IDF/SVD (falló) y con embeddings (funcionó).
+- `tune_fusion.py` — barrido del peso de la fusión (α) y la constante K.
+- `dial_dificultad.py` — ponderación adaptativa del texto por dificultad (entropías de Rényi); no superó al peso fijo.
+- `reranker.py` — reranker aprendido (MaxEnt + LightGBM); empató a la fusión a mano.
+- `tune_pesos.py`, `prop_pesos.py`, `prop_rocco.py` — tuneo de los pesos del B0-v2 y pruebas de propagación al modelo final.
+- `probar_bge.py`, `confirmar_bge.py`, `comparar_modelos.py` — pruebas y comparación de embedders.
+- `confirmar_verticales.py` — evaluación del modelo en las 5 verticales (dev/test).
+- `viz_b0.py`, `viz_b0_multi.py` — figuras del diagnóstico del B0.
+- `colab_embeddings.py` — notebook de Colab para codificar con modelos grandes en GPU.
 
-**La métrica de referencia es el MRR**: 1 / puesto del ganador, promediado sobre las
-licitaciones (0 si el ganador no está en el top 100). Lo que se compara entre grupos es
-**cuánto mejora el MRR sobre el del B0**, en las mismas licitaciones y con su intervalo.
+## Créditos
 
-Algunas licitaciones tienen varios ganadores (contratos adjudicados a más de una empresa;
-pasa en ~1/3 de las de `rd` y en menos del 4% en el resto). Ahí cada ganador se puntúa con
-1/puesto **sin contar a los otros ganadores que tiene arriba**, y la licitación vale el
-promedio. Con ganadores en los puestos 1, 2 y 50: puestos 1, 1 y 48, y
-(1 + 1 + 1/48) / 3 = 0,67. Con un solo ganador es el MRR de siempre.
-
-Se reportan además `Hit@5` (algún ganador en el top 5) y `Hit@1`, y todo por separado para
-las licitaciones donde el B0 ya pone a un ganador en su top 10 (`S_inc`) y para el resto
-(`S_new`), que es donde el texto tiene que hacer todo el trabajo.
-
-El MRR se decide casi todo en los primeros puestos: subir un ganador del puesto 80 al 30
-suma 0,02, del 5 al 1 suma 0,8. Para ver el progreso intermedio, `evaluar.py` muestra
-también tres diagnósticos (no cuentan para la comparación):
-
-- `Hit@100`: en qué fracción de las licitaciones aparece algún ganador en la lista.
-- `Recall@100`: qué fracción de los ganadores aparece en la lista, promediada por licitación.
-  Con un ganador es igual a `Hit@100`; con varios, cuenta a cada uno.
-- `puesto mediano`: el puesto del mejor ganador, entre las licitaciones donde aparece. Se
-  lee junto con el recall: una lista más corta lo baja aunque el modelo no sea mejor.
-
-Para evaluar un ranking sobre la validación propia:
-
-```
-uv run evaluar.py mi_ranking_j.csv --datos data/j --respuestas mi_val_j.parquet --b0 b0_j.csv
-```
-
-## El B0
-
-El B0 rankea a las candidatas **sólo por quién ganó antes**, sin leer ningún texto: las
-empresas que ya ganaron contratos parecidos, sobre todo en la misma oficina y hace poco,
-van arriba.
-
-### Cómo se calcula
-
-Para una licitación `q` publicada en `t_q`, cada contrato previo `a` del `historial` (de la
-empresa `e_a`, firmado en `t_a < t_q`) pesa según su antigüedad:
-
-```
-w(a) = exp( −(t_q − t_a) / τ ),      τ = 2,5 años
-```
-
-Hay cinco **niveles**, cada uno con un criterio de qué contratos previos "se parecen" a la
-licitación, y un peso fijo:
-
-| nivel | el contrato previo tiene… | peso λ |
-|---|---|---|
-| PSC + oficina | el mismo `psc` y la misma `office` | 0,40 |
-| PSC | el mismo `psc` | 0,24 |
-| PSC + set-aside | el mismo `psc` y el mismo tipo de `set_aside` | 0,20 |
-| NAICS | el mismo `naics` | 0,12 |
-| global | (cualquiera) | 0,04 |
-
-En cada nivel, la probabilidad de una empresa es la parte del peso que se lleva entre los
-contratos previos que cumplen el criterio:
-
-```
-               Σ  w(a)   sobre los contratos del nivel ganados por e
-P_nivel(e) = ─────────────────────────────────────────────────────────     (0 si no hay ninguno)
-               Σ  w(a)   sobre todos los contratos del nivel
-```
-
-y el B0 es la mezcla:
-
-```
-p_b0(e) = 0,40 · P_psc+oficina(e) + 0,24 · P_psc(e) + 0,20 · P_psc+set-aside(e)
-        + 0,12 · P_naics(e)        + 0,04 · P_global(e)
-```
-
-Las candidatas se ordenan por `p_b0` de mayor a menor. Detalles:
-
-- **Sólo cuenta lo anterior a `t_q`** (estrictamente): el historial está completo hasta el
-  corte, pero cada licitación ve sólo su pasado.
-- **El PSC es el código completo** (`DA01`), no la familia.
-- **El set-aside se agrupa** en 8A, SDVOSB, WOSB, HUBZONE, VOSB, SMALL, NONE y OTRO, porque
-  la licitación y el historial lo escriben distinto.
-- **Si un nivel no tiene contratos previos, aporta 0** y su peso no se redistribuye.
-- **Los empates** (sobre todo las muchas empresas con `p_b0 = 0`, que nunca ganaron nada
-  parecido) se ordenan al azar, con una semilla que sale del `id` de la licitación.
-- **No se entrena nada**: `τ` y los pesos están fijos.
-
-El nivel que hace el trabajo es PSC + oficina: cada oficina tiende a contratar con las
-mismas empresas.
-
-### Cómo se usa
-
-`b0.py` calcula el baseline. Es determinístico: el mismo comando da lo mismo en cualquier
-máquina.
-
-```
-uv run b0.py data/j --salida b0_j.csv
-```
-
-Como módulo da `p_b0` para todas las candidatas, para combinarlo con un modelo propio:
-
-```python
-import b0
-prior = b0.B0(pd.read_parquet("data/j/historial.parquet"))
-p = prior.p_b0(licitacion, empresas)    # pd.Series indexada por parent_uei
-```
-
-Lo que tiene que dar sobre todo `data/` (si da otra cosa, algo cambió):
-
-| vertical | licitaciones | MRR | Hit@5 | Hit@1 |
-|---|---|---|---|---|
-| `rd` | 328 | 0,125 | 0,271 | 0,079 |
-| `d` | 819 | 0,092 | 0,112 | 0,056 |
-| `j` | 4.504 | 0,164 | 0,222 | 0,103 |
-| `r` | 2.180 | 0,175 | 0,239 | 0,118 |
-| `it` | 1.792 | 0,081 | 0,125 | 0,035 |
-
-```
-uv run b0.py data/j --salida b0_j.csv
-uv run evaluar.py b0_j.csv --datos data/j
-```
-
+- `b0.py`, `evaluar.py`: provistos por la cátedra.
+- `b0_rocco.py` (pesos + tau tuneados por vertical): tuneo de Rocco, validado e integrado.

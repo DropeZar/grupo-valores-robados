@@ -9,3 +9,11 @@ __pycache__/
 *.py[cod]
 .venv/
 .ipynb_checkpoints/
+
+# Embeddings cacheados (se regeneran con los scripts)
+.emb_cache/
+*.npy
+
+# Mac
+.DS_Store
+figuras/b0_enterrados_*_20*.png

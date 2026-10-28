@@ -6,182 +6,118 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
-\usepackage[margin=2.5cm]{geometry}
-\usepackage{xcolor}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{figuras/}{./}{../figuras/}}
 
-\title{\textbf{\mbox{\Large ¿Quién gana la licitación?}}\\[4pt]
-Capacidad contra historial: rescatar a los ganadores que el \textit{baseline} entierra}
+% --- compactar un poco los flotantes y los títulos ---
+\setlength{\abovecaptionskip}{4pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{6pt plus 1pt}{3pt}
+\titlespacing*{\paragraph}{0pt}{4pt}{1em}
+
+\title{\vspace{-1.2cm}{\Large ¿Quién gana la licitación?}\\[3pt]
+\large Capacidad contra historial: rescatar a los ganadores que el baseline entierra}
 \author{Grupo Valores Robados}
 \date{}
 
 \begin{document}
 \maketitle
+\vspace{-1.1cm}
 
 \begin{abstract}
-\noindent El \textit{baseline} provisto (B0) rankea empresas por \textbf{historial}: quién ganó
-antes el mismo trabajo, sobre todo en la misma oficina. Mostramos que esa estrategia
-\textbf{entierra ganadores} --- empresas capaces que no son ``el proveedor de la casa'' de esa
-oficina ---, y que la señal que falta está en el \textbf{texto}. Modelamos cada empresa como un
-\emph{vector de capacidad} y cada licitación como un \emph{vector de requerimiento}, y combinamos
-esa alineación con el historial. El modelo mejora el MRR sobre el B0 de forma significativa en
-4 de 5 verticales sobre el conjunto de prueba sellado (mejora relativa del 37--124\,\%), con el
-resultado sosteniéndose de validación a prueba ($+0.074$ contra $+0.073$): no es sobreajuste. Documentamos además los
-experimentos que \emph{no} funcionaron, que delimitan dónde está (y dónde no está) la ganancia.
+\noindent El baseline provisto (B0) rankea empresas por historial: quién ganó antes el mismo
+trabajo, sobre todo en la misma oficina. Mostramos que eso entierra ganadores capaces que no son
+``el proveedor de la casa'', y que la señal que falta está en el texto. Modelamos cada empresa como
+un vector de capacidad y cada licitación como uno de requerimiento, y fusionamos esa alineación con
+el historial. El modelo mejora el MRR sobre el B0 de forma significativa en 4 de 5 verticales sobre
+el conjunto de prueba sellado (mejora relativa $37$--$124\,\%$), y el resultado se sostiene de
+validación a prueba ($+0.074$ vs.\ $+0.073$): no es sobreajuste. El foco de este informe está en
+interpretar por qué funciona y qué dicen sus parámetros.
 \end{abstract}
 
-\section{El problema}
+\section{El problema y el diagnóstico}
 
-Para cada licitación hay que rankear las empresas candidatas (del orden de 30.000 por licitación)
-por probabilidad de ganarla, usando sólo información anterior a su publicación. La métrica es el
-\textbf{MRR} (inverso del puesto del ganador), y se compite por \textbf{cuánto se mejora el MRR
-sobre el B0}. El B0 es un \textit{prior} de historial: pondera los contratos previos de cada
-empresa (con decaimiento temporal) según coincidan en PSC (qué se compra), oficina (quién compra)
-y NAICS. No lee ningún texto.
+Para cada licitación hay que rankear las empresas candidatas ($\sim$30.000 por licitación) por
+probabilidad de ganarla, usando sólo información anterior a su publicación. La métrica es el MRR
+(promedio de $1/\text{puesto}$ del ganador) y se compite por cuánto se mejora sobre el B0, un prior
+que pondera los contratos previos de cada empresa (con decaimiento temporal) según coincidan en PSC
+(qué se compra), oficina (quién compra) y NAICS. No lee texto.
 
-\section{Diagnóstico: el B0 entierra ganadores}
-\label{sec:diag}
-
-Evaluado sobre un semestre de validación, el B0 deja al ganador \textbf{fuera del top-100 el
-47\,\% de las veces}; el puesto mediano del ganador es 73 (sobre $\sim$32.000 candidatas), y sólo
-lo pone primero el 8\,\% de las veces.
-
-\paragraph{¿Por qué?} El nivel más fuerte del B0 es ``mismo PSC + misma oficina''. En
-consecuencia, entierra a empresas capaces que hicieron el mismo trabajo \emph{en otra oficina}:
-el \textbf{61\,\%} de los ganadores enterrados \textbf{nunca había ganado en esa oficina}
-(contra el 3\,\% de los que el B0 sí encuentra). No son empresas desconocidas --- todas tienen
-historial ---; simplemente no son el proveedor habitual de esa oficina puntual.
-
-\paragraph{Un ejemplo.} En la licitación \textit{``IBM Hardware Repair''} (una base naval) ganó
-una empresa cuyo historial es puro ``HP/Dell/IBM server maintenance'' --- el proveedor obvio ---,
-pero el B0 la puso en el \textbf{puesto 4.753} por no haberle vendido antes a \emph{esa} oficina.
-En el puesto 1 puso al proveedor histórico de la oficina. La señal estaba en el \textbf{texto}.
+\paragraph{El B0 entierra ganadores.} En validación, el B0 deja al ganador fuera del top-100 el
+47\,\% de las veces; el puesto mediano del ganador es 73 sobre $\sim$32.000 candidatas. La causa es
+estructural: su nivel más fuerte es ``mismo PSC $+$ misma oficina'', así que entierra a quien hizo
+el mismo trabajo en otra oficina. El 61\,\% de los ganadores enterrados nunca había ganado en esa
+oficina (contra 3\,\% de los que el B0 sí encuentra): no son desconocidos, simplemente no son el
+proveedor habitual de esa oficina puntual. Caso típico: en ``IBM Hardware Repair'' (una base naval)
+ganó una empresa de puro historial ``server maintenance'', y el B0 la mandó al puesto 4.753 por no
+haberle vendido antes a esa oficina. La señal que la rescata está en el texto.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=\linewidth]{b0_enterrados_j}
-  \caption{El B0 entierra ganadores. (a) distribución del puesto del ganador; (b) curva Hit@$k$
-  (techo $\approx$53\,\%); (c) el 61\,\% de los enterrados nunca ganó en esa oficina; (d) hay
-  ganadores con cientos de contratos previos igualmente enterrados: no les falta experiencia,
-  la ganaron en otro lado.}
+  \includegraphics[width=0.78\linewidth]{b0_enterrados_j}
+  \vspace{-4pt}
+  \caption{(a) puesto del ganador según el B0; (b) Hit@$k$ (techo $\approx$53\,\%); (c) el 61\,\%
+  de los enterrados nunca ganó en esa oficina; (d) hay ganadores con cientos de contratos previos
+  igualmente enterrados: no les falta experiencia, la ganaron en otro lado.}
 \end{figure}
 
-\paragraph{La tesis.} De acá sale la idea que vertebra todo el trabajo:
-\begin{center}
-\textbf{Códigos $=$ cobertura (historial). \quad Texto $=$ discriminación (capacidad).}
-\end{center}
-El historial cubre bien ``quién suele ganar acá''; el texto distingue, entre las candidatas,
-\emph{cuál es capaz de este trabajo puntual}.
+\begin{center}\fbox{Códigos $=$ cobertura (historial). \quad Texto $=$ discriminación (capacidad).}\end{center}
 
 \section{El modelo: capacidad contra requerimiento}
-\label{sec:modelo}
 
-Pensamos el problema como un \textbf{emparejamiento de capacidad}. Representamos:
-\begin{itemize}
-  \item cada \textbf{empresa} $e$ por un vector de \emph{capacidad} $\mathbf{c}_e$ (qué sabe hacer),
-  \item cada \textbf{licitación} $q$ por un vector de \emph{requerimiento} $\mathbf{r}_q$ (qué pide),
-\end{itemize}
-y puntuamos por \textbf{alineación}, el producto punto $\mathbf{c}_e \cdot \mathbf{r}_q$: alto
-cuando las fortalezas de la empresa coinciden con lo que la licitación demanda. Este marco tiene
-una lectura de mecánica estadística: con $P(e \text{ gana} \mid q) \propto \exp(\mathbf{c}_e \cdot
-\mathbf{r}_q)$ es una distribución de Boltzmann, donde el puntaje es menos la energía.
+Pensamos el problema como un emparejamiento de capacidad: cada empresa $e$ es un vector de capacidad
+$\mathbf{c}_e$ (qué sabe hacer) y cada licitación $q$ uno de requerimiento $\mathbf{r}_q$ (qué pide),
+y puntuamos por alineación $\mathbf{c}_e\cdot\mathbf{r}_q$. Tiene una lectura de mecánica
+estadística: con $P(e\text{ gana}\mid q)\propto\exp(\mathbf{c}_e\cdot\mathbf{r}_q)$ es una
+distribución de Boltzmann, con el puntaje como menos la energía. Construimos ambos vectores con un
+modelo de embeddings pre-entrenado (la empresa, desde el texto de sus contratos pasados; la
+licitación, desde su título y las descripciones de PSC/NAICS/oficina); la similitud coseno es la
+señal de capacidad. A diferencia de comparar palabras, el espacio de embeddings empareja conceptos:
+``diesel generator'' y ``emergency power unit'' quedan cerca sin compartir palabras. Entre cuatro
+embedders, el más chico (bge-small, 33M) fue el mejor: sobre texto corto y de dominio, los grandes
+(bge-base, Gemma) agregan ruido, no señal.
 
-\paragraph{La capacidad, desde el texto.} Construimos $\mathbf{c}_e$ y $\mathbf{r}_q$ con un modelo
-de \textbf{embeddings} pre-entrenado: la empresa se describe por el texto de sus contratos pasados
-(más las descripciones de sus códigos), y la licitación por su título más las descripciones de su
-PSC, NAICS y oficina. La similitud coseno de esos vectores es la señal de capacidad. A diferencia
-de comparar palabras crudas, el espacio de embeddings empareja \emph{conceptos}: ``diesel
-generator'' y ``emergency power unit'' quedan cerca aunque no compartan una palabra.
-
-\paragraph{El historial, mejorado (B0-v2).} Al B0 le agregamos niveles de \textit{backoff} ---
-familia de PSC y jerarquía de oficina (subagencia) --- que rescatan empresas con trabajo
-``parecido pero no idéntico''. Además, los pesos de los niveles y la vida media del decaimiento
-($\tau$) se optimizan por vertical de forma robusta (promediando el MRR sobre varios semestres y
-sin tocar el conjunto de prueba); llamamos a esta versión \textbf{B0-v2 optimizado}.
-
-\paragraph{La fusión.} Reordenamos el top-200 del B0-v2 combinando el puesto por historial y el
-puesto por capacidad mediante \emph{rank fusion}:
+Al historial le sumamos niveles de backoff (familia de PSC y jerarquía de oficina) y optimizamos
+por vertical sus pesos y la vida media del decaimiento $\tau$ (B0-v2 optimizado). Reordenamos el
+top-200 del B0-v2 fusionando el puesto por historial $r_{\text{hist}}$ con el puesto por capacidad
+$r_{\text{cap}}$:
 \[
-  s(q,e) \;=\; \frac{1-\alpha}{K + r_{\text{hist}}(q,e)} \;+\; \frac{\alpha}{K + r_{\text{cap}}(q,e)},
-  \qquad \alpha=0.5,\ K=5,
+  s(q,e)\;=\;\frac{1-\alpha}{K+r_{\text{hist}}(q,e)}\;+\;\frac{\alpha}{K+r_{\text{cap}}(q,e)},
+  \qquad \alpha=0.5,\ K=5.
 \]
-donde $r_{\text{hist}}$ es el puesto por el B0-v2 y $r_{\text{cap}}$ el puesto por la similitud de
-embeddings. Fusionar es lo que paga: el texto por sí solo, reemplazando al historial, empeora el
-ranking ($\Delta\text{MRR}=-0.037$); suma cuando \emph{acompaña} al historial.
 
-\paragraph{La dificultad de la licitación.} En este marco, la ``dificultad'' de una licitación es
-cuán predecible es: si una empresa domina su contexto (historial concentrado) es fácil; si está
-repartido, es abierta. Esta noción motiva una de nuestras exploraciones (Sección~\ref{sec:neg}).
+\section{Qué significan $\alpha$ y $K$}
 
-\section{Afinado y selección de componentes}
+La fórmula es fusión de rangos (RRF): cada señal ``vota'' por una empresa con $1/(K+\text{puesto})$ y
+se suman los votos. Sus dos parámetros tienen una lectura directa, y los dos óptimos son interiores
+(no caen en el borde del barrido), lo que les da sentido.
 
-\paragraph{Elección del embedder.} Comparamos cuatro modelos sobre validación, todos con el B0-v2
-optimizado. El resultado es contraintuitivo: \textbf{el modelo más chico es el mejor}. Sobre texto
-corto y de dominio, los modelos grandes no aportan (y su capacidad extra agrega ruido).
+\paragraph{$\alpha$: cuánto pesa la capacidad frente al historial.} $\alpha$ reparte el peso entre
+las señales: $\alpha{=}0$ es B0-v2 puro (sólo historial), $\alpha{=}1$ es sólo texto. El óptimo cae
+justo en $\alpha{=}0.5$: pesan igual. Que el máximo esté en el medio, y no pegado a un extremo, es
+informativo --- las dos señales son igual de valiosas y no redundantes. Si el texto fuera ruido
+subordinado, el óptimo estaría cerca de $0$; si el historial sobrara, cerca de $1$. Y el texto solo
+($\alpha{=}1$), reemplazando al historial, empeora el ranking ($\Delta\text{MRR}=-0.037$). La
+ganancia es de la sinergia: cada señal corrige los errores de la otra, no la reemplaza.
 
-\begin{table}[h]
-\centering
-\begin{tabular}{lcccccc}
-\toprule
-Embedder & rd & d & j & r & it & \textbf{prom.} \\
-\midrule
-MiniLM (22M)              & $+0.024$ & $+0.051$ & $+0.055$ & $+0.078$ & $+0.039$ & $+0.049$ \\
-\textbf{bge-small (33M)}  & $\mathbf{+0.049}$ & $\mathbf{+0.091}$ & $\mathbf{+0.078}$ & $\mathbf{+0.093}$ & $+0.059$ & $\mathbf{+0.074}$ \\
-bge-base (109M)           & $+0.023$ & $+0.072$ & $+0.073$ & $+0.075$ & $+0.038$ & $+0.056$ \\
-gemma (300M)              & $+0.027$ & $+0.086$ & $+0.073$ & $+0.058$ & $+0.063$ & $+0.062$ \\
-\bottomrule
-\end{tabular}
-\caption{$\Delta$MRR sobre el B0 en validación, por vertical. bge-small gana en 4 de 5 verticales
-y tiene el mejor promedio.}
-\end{table}
+\paragraph{$K$: cuánta ventaja le da a la punta.} En $1/(K+r)$, $K$ fija cuánto más vale estar
+primero que quinto. Con $K$ chico la punta manda ($K{=}0$: el puesto 1 vale el doble que el 2); con
+$K$ grande los votos se aplanan y la fusión se vuelve un promedio ``democrático'' que pierde
+resolución en la cabeza --- justo donde se juega el MRR. El óptimo en $K{=}5$ es el punto medio:
+premia fuerte estar arriba en alguna señal, pero no tanto como para que un único puesto 1 ruidoso
+arrastre todo. Equilibra confianza en la punta contra robustez al ruido.
 
-\paragraph{La base de historial.} El \textit{backoff} de códigos y el tuneo por vertical de los
-pesos y $\tau$ (el B0-v2 optimizado) se \emph{propagan} al modelo final: sube o empata en las 5
-verticales, sin empeorar ninguna (Figura~\ref{fig:comp}). El aporte del tuneo es chico pero gratis
-(sólo cambia constantes).
+\paragraph{Por qué rangos y no puntajes.} Las señales viven en escalas incomparables: el B0 da una
+distribución picuda (casi todo el peso en pocas empresas); el coseno es suave en $[-1,1]$. Sumar los
+puntajes crudos obligaría a calibrarlos; sumar $1/(K+\text{puesto})$ usa sólo el orden, que es lo
+robusto, e ignora los outliers de puntaje.
 
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=0.85\linewidth]{comparacion_b0}
-  \caption{$\Delta$MRR sobre el B0 del modelo final (rerank con bge-small) según la base de
-  historial: B0, B0-v2 (con \textit{backoff}) y B0-v2 optimizado (pesos y $\tau$ tuneados por
-  vertical). El refinamiento de la base sube o empata en todas las verticales.}
-  \label{fig:comp}
-\end{figure}
-
-\section{Lo que no funcionó (y por qué importa)}
-\label{sec:neg}
-
-Reportar los experimentos negativos delimita dónde está la ganancia y es, también, resultado.
-
-\begin{itemize}
-  \item \textbf{Texto con TF-IDF/SVD.} Quedó \emph{por debajo} del B0 ($\Delta\text{MRR}=-0.006$).
-  El salto vino de cambiar a embeddings: emparejan conceptos, no palabras.
-
-  \item \textbf{Ponderación adaptativa por dificultad.} Hicimos variar el peso $\alpha$ del texto
-  según la dificultad de cada licitación, midiéndola con \textbf{entropías de Rényi} de la
-  distribución del historial. Barriendo toda la familia de Rényi, \emph{ninguna} superó al peso
-  fijo. La razón no es la medida: es \textbf{estructural}. El texto daña muy poco los casos fáciles
-  ($-0.006$), así que aun con un detector perfecto el margen a recuperar es $\sim +0.002$, por
-  debajo del ruido. El peso fijo ya es casi óptimo.
-
-  \item \textbf{Reranker aprendido.} Un modelo de \textit{learning-to-rank} (regresión logística,
-  es decir máxima entropía, y LightGBM) con muchas \textit{features} \textbf{empató} a la fusión a
-  mano (dentro del ruido). Confirma que la combinación simple ya era casi óptima.
-\end{itemize}
-
-\section{Validación}
-
-\paragraph{Metodología.} Cortes temporales por vertical: entrenamiento hasta mediados de 2023,
-\emph{validación} en el semestre siguiente (donde se eligen hiperparámetros) y \emph{prueba} en el
-último semestre, \textbf{sellado} (se toca una sola vez). Para una licitación en $t$ sólo se usa
-información anterior a $t$: no hay fuga de futuro. Los intervalos de confianza se estiman por
-\textit{bootstrap} pareado sobre las licitaciones (al 95\,\%).
-
-\paragraph{Resultado sobre prueba.} Sobre el conjunto de prueba sellado, el modelo mejora el MRR
-sobre el B0 de forma \textbf{significativa en 4 de 5 verticales} (el intervalo no cruza el cero).
+\section{Resultados e interpretación}
 
 \begin{table}[h]
 \centering
@@ -189,38 +125,63 @@ sobre el B0 de forma \textbf{significativa en 4 de 5 verticales} (el intervalo n
 \toprule
 Vertical & $N$ & B0 MRR & modelo MRR & $\Delta$MRR (IC 95\%) \\
 \midrule
+d  & 161 & 0.090 & 0.202 & $+0.112\ (+0.068,\,+0.157)$ \\
+it & 319 & 0.088 & 0.165 & $+0.077\ (+0.048,\,+0.106)$ \\
+r  & 468 & 0.194 & 0.266 & $+0.071\ (+0.046,\,+0.098)$ \\
 j  & 995 & 0.136 & 0.202 & $+0.067\ (+0.052,\,+0.081)$ \\
 rd & 57  & 0.091 & 0.145 & $+0.054\ (-0.004,\,+0.119)$ \\
-d  & 161 & 0.090 & 0.202 & $+0.112\ (+0.068,\,+0.157)$ \\
-r  & 468 & 0.194 & 0.266 & $+0.071\ (+0.046,\,+0.098)$ \\
-it & 319 & 0.088 & 0.165 & $+0.077\ (+0.048,\,+0.106)$ \\
 \bottomrule
 \end{tabular}
-\caption{Configuración final (bge-small + B0-v2 optimizado): $\Delta$MRR sobre el B0 en el
-conjunto de prueba \textbf{sellado} (2024S1), significativo en 4 de 5 verticales (\texttt{rd} es
-positivo pero con pocos datos). Promedio ponderado por $N$: $\Delta\text{MRR}=+0.073$.}
+\vspace{-2pt}
+\caption{Modelo final (bge-small $+$ B0-v2 optimizado) sobre el conjunto de prueba sellado.
+Promedio ponderado por $N$: $\Delta\text{MRR}=+0.073$.}
 \end{table}
 
-\paragraph{No es sobreajuste.} El promedio ponderado del $\Delta$MRR pasó de $+0.074$ en
-validación a $+0.073$ en prueba --- prácticamente idénticos ---, lo que descarta el sobreajuste:
-los hiperparámetros elegidos en validación generalizan a datos que el modelo nunca vio. En
-términos relativos, la mejora es del \textbf{37--124\,\%} sobre un \textit{baseline} fuerte:
-modesta en valor absoluto, pero real y estable.
+\paragraph{La mejora aparece donde el historial falla.} En relativo, el salto es mayor donde el B0
+es más débil: en \texttt{d} e \texttt{it} (B0 MRR $\sim0.09$) el texto suma $+124\,\%$ y $+88\,\%$;
+en \texttt{r}, donde el historial ya es fuerte (B0 MRR $0.194$), suma $+37\,\%$. Es exactamente lo
+que predice la tesis: el texto rescata donde el historial no alcanza y casi no toca donde ya
+acierta. Por construcción el rerank reordena dentro del shortlist del historial, así que actúa sobre
+los ganadores que el B0 no ponía en la punta --- los enterrados de la Sección 1 --- sin desarmar los
+que ya acertaba.
+
+\paragraph{Por qué el MRR se mueve poco en absoluto.} El MRR pesa $1/\text{puesto}$ del ganador:
+está dominado por la punta. Subir un ganador del puesto 80 al 30 casi no lo mueve; sólo suma
+acercarlo al puesto 1. Por eso un $\Delta$ de $+0.07$ sobre un B0 de $\sim0.13$ es grande: no es
+recall barato, es haber corrido ganadores hasta la cabeza del ranking. La contracara es que el techo
+absoluto es bajo y toda ganancia se pelea en los primeros puestos.
+
+\paragraph{No es sobreajuste.} El $\Delta$MRR ponderado pasó de $+0.074$ en validación a $+0.073$ en
+prueba: idénticos. Los hiperparámetros elegidos en validación generalizan a datos que el modelo
+nunca vio. (\texttt{rd} queda positivo pero no significativo: con 57 licitaciones no hay potencia
+estadística, no es mala señal.)
+
+\section{Lo que no funcionó (y por qué importa)}
+
+\begin{itemize}\itemsep1pt
+  \item Texto con TF-IDF/SVD: por debajo del B0 ($-0.006$). El salto vino de los embeddings ---
+  emparejan conceptos, no palabras.
+  \item Ponderación adaptativa por dificultad: variamos $\alpha$ según la ``apertura'' de cada
+  licitación, medida con entropías de Rényi del historial. Ninguna de la familia superó al $\alpha$
+  fijo, y la razón no es la medida sino la estructura: el texto daña tan poco los casos fáciles
+  ($-0.006$) que, aun con un detector perfecto, el margen a recuperar es $\sim+0.002$, bajo el ruido.
+  El peso fijo ya es casi óptimo.
+  \item Reranker aprendido (regresión logística $=$ máxima entropía, y LightGBM) con muchas
+  features: empató a la fusión a mano. Confirma que la combinación simple ya era casi óptima ---
+  $\alpha$ y $K$ aprendidos no le ganan a $\alpha{=}0.5$, $K{=}5$.
+\end{itemize}
 
 \section{Conclusión}
 
-Partimos de un diagnóstico --- el B0 entierra ganadores por premiar el historial de oficina ---
-y construimos un modelo que empareja la \textbf{capacidad} de cada empresa (desde el texto) con el
-\textbf{requerimiento} de cada licitación, combinándola con el historial. El texto aporta justo
-donde el historial falla.
+El B0 entierra ganadores por premiar el historial de oficina; nuestro modelo empareja la capacidad
+de cada empresa (desde el texto) con el requerimiento de cada licitación y la fusiona con el
+historial, aportando justo donde el historial falla. Lo que dejan los parámetros es la lección:
+$\alpha{=}0.5$ dice que texto e historial son igual de informativos y sinérgicos; $K{=}5$, que la
+punta pesa pero sin dejar que un puesto ruidoso mande; y el techo de la ponderación por dificultad
+es estructural, no de medida. El modelo final --- bge-small para la capacidad, B0-v2 optimizado para
+el historial, y una fusión simple --- es a la vez el más preciso y el más barato de correr.
 
-Las lecciones que dejó el camino son tan valiosas como el número: subir el \emph{recall} no sube
-el MRR (el MRR se juega en la punta); el embedder \emph{más chico} resultó el mejor; y la
-ponderación por dificultad tiene un techo \emph{estructural}, no de medida. El modelo final ---
-bge-small para la capacidad, B0-v2 optimizado (pesos y $\tau$ tuneados) para el historial, y una
-fusión simple --- es a la vez el más preciso y el más barato de correr.
-
-\paragraph{Créditos.} \texttt{b0.py} y \texttt{evaluar.py} fueron provistos por la cátedra; el
-resto del código y los experimentos son del grupo.
+\paragraph{Créditos.} \texttt{b0.py} y \texttt{evaluar.py} fueron provistos por la cátedra; el resto
+del código y los experimentos son del grupo.
 
 \end{document}

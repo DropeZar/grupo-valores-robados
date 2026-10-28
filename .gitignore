@@ -1,6 +1,12 @@
 # Los datos se bajan del release, no van en el repo (ver README).
 data/
+test/
 *.zip
+
+# Artefactos de LaTeX (el informe se compila en Overleaf)
+*.log
+*.aux
+*.out
 
 # Rankings y salidas locales
 *.csv

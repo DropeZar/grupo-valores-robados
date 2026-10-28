@@ -97,8 +97,3 @@ El camino completo, incluidos los **experimentos negativos** (que también son r
 - `confirmar_verticales.py` — evaluación del modelo en las 5 verticales (dev/test).
 - `viz_b0.py`, `viz_b0_multi.py` — figuras del diagnóstico del B0.
 - `colab_embeddings.py` — notebook de Colab para codificar con modelos grandes en GPU.
-
-## Créditos
-
-- `b0.py`, `evaluar.py`: provistos por la cátedra.
-- `b0_rocco.py` (pesos + tau tuneados por vertical): tuneo de Rocco, validado e integrado.

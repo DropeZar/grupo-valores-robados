@@ -4,7 +4,7 @@
 candidatas por probabilidad de ganarla, usando sólo información anterior a su publicación.
 Se compite por **cuánto mejora el MRR sobre el baseline B0**.
 
-> La consigna original y el detalle de los datos están en el repo público de la cátedra.
+> La consigna original y el detalle de los datos están en el repo público del track.
 
 ---
 

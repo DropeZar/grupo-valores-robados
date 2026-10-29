@@ -3,7 +3,10 @@ data/
 test/
 *.zip
 
-# Artefactos de LaTeX (el informe se compila en Overleaf)
+# El informe se entrega por mail (PDF), no va en el repo
+docs/informe.tex
+docs/INFORME.md
+docs/*.pdf
 *.log
 *.aux
 *.out
